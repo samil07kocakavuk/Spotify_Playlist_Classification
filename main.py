@@ -65,6 +65,9 @@ class SavePlaylistsRequest(BaseModel):
     playlist_names: dict[str, str] = Field(default_factory=dict)
     public: bool = False
 
+@app.get("/")
+def root() -> dict:
+    return {"ok": True}
 
 @app.get("/health")
 def health() -> dict:
