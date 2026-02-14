@@ -23,11 +23,18 @@ REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:3000/callback
 origins_env = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
 ALLOWED_ORIGINS = [origin.strip() for origin in origins_env.split(",") if origin.strip()]
 
+# Mobil/LAN erişimi için (örn. 192.168.x.x) varsayılan regex.
+origin_regex_env = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$",
+)
+
 app = FastAPI(title="Spotify Playlist Classifier API")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=origin_regex_env or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,6 +48,7 @@ def _log(message: str) -> None:
 
 class CodeRequest(BaseModel):
     code: str
+    redirect_uri: str | None = None
 
 
 class PlaylistInfoRequest(BaseModel):
@@ -119,7 +127,8 @@ def classify(data: ClassifyRequest) -> dict:
 
 @app.post("/spotify/token")
 def get_token(data: CodeRequest) -> dict:
-    _log("/spotify/token çağrıldı")
+    redirect_uri = (data.redirect_uri or REDIRECT_URI).strip()
+    _log(f"/spotify/token çağrıldı. redirect_uri={redirect_uri}")
 
     if not CLIENT_ID or not CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET .env içinde tanımlı olmalı")
@@ -129,7 +138,7 @@ def get_token(data: CodeRequest) -> dict:
         data={
             "grant_type": "authorization_code",
             "code": data.code,
-            "redirect_uri": REDIRECT_URI,
+            "redirect_uri": redirect_uri,
             "client_id": CLIENT_ID,
             "client_secret": CLIENT_SECRET,
         },

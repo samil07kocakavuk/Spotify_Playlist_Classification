@@ -9,8 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Save, Music, ArrowRight, Sparkles, TrendingUp, Users, Clock } from "lucide-react"
 import { clearSpotifySession, getSpotifyToken, isAuthExpiredError, isSpotifySessionValid } from "@/lib/auth"
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
+import { browserError, browserLog, getApiBaseUrl } from "@/lib/runtime-config"
 
 type TrackItem = {
   id?: string | null
@@ -86,8 +85,16 @@ export default function SavePage() {
     setIsSaving(true)
     setError("")
 
+    const apiBaseUrl = getApiBaseUrl()
+
     try {
-      const response = await fetch(`${API_BASE_URL}/save_playlists`, {
+      browserLog("save", "save_playlists isteği gönderiliyor", {
+        apiBaseUrl,
+        categories: Object.keys(results).length,
+        totalSongs,
+      })
+
+      const response = await fetch(`${apiBaseUrl}/save_playlists`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -101,6 +108,8 @@ export default function SavePage() {
       })
 
       const data = await response.json()
+      browserLog("save", "save_playlists cevabı alındı", { status: response.status, ok: response.ok, data })
+
       if (!response.ok) {
         if (response.status === 401 || response.status === 403 || isAuthExpiredError(data?.detail || data)) {
           clearSpotifySession()
@@ -114,7 +123,9 @@ export default function SavePage() {
       localStorage.setItem("save_skipped", JSON.stringify(data.skipped || []))
       router.push("/success")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Beklenmeyen bir hata oluştu")
+      const message = err instanceof Error ? err.message : "Beklenmeyen bir hata oluştu"
+      setError(message)
+      browserError("save", "Playlist kaydetme hatası", { message, error: err })
     } finally {
       setIsSaving(false)
     }

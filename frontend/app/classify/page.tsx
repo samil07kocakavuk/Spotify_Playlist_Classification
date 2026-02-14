@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Music, Brain, Sparkles } from "lucide-react"
 import { clearSpotifySession, isSpotifySessionValid } from "@/lib/auth"
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
+import { browserError, browserLog, getApiBaseUrl } from "@/lib/runtime-config"
 
 type TrackItem = {
   id?: string | null
@@ -17,6 +16,31 @@ type TrackItem = {
 
 type EmotionStatsMap = Record<string, { count: number; percentage: number }>
 
+type ClientEvent = {
+  ts: string
+  event: string
+  message: string
+  batch?: number
+  total_batches?: number
+  status?: string
+  duration_sec?: number
+  song_count?: number
+  reason?: string
+}
+
+type BatchLog = {
+  batch: number
+  total_batches: number
+  status: "ok" | "fallback"
+  duration_sec: number
+  song_count: number
+  provider: string
+  mode: string
+  attempt: number
+  unique_labels: string[]
+  reason?: string
+}
+
 type ClassificationResult = {
   playlist_id: string
   total_songs: number
@@ -24,6 +48,8 @@ type ClassificationResult = {
   emotion_stats: EmotionStatsMap
   grouped_tracks: Record<string, TrackItem[]>
   failed_batches?: Array<{ batch: number; reason: string }>
+  batch_logs?: BatchLog[]
+  client_events?: ClientEvent[]
 }
 
 type EmotionStat = {
@@ -69,14 +95,26 @@ export default function ClassifyPage() {
     const emotions: string[] = JSON.parse(localStorage.getItem("emotions") || "[]")
     const storedTotal = parseInt(localStorage.getItem("total_songs") || "0", 10)
     const exampleBatch: string[] = JSON.parse(localStorage.getItem("example_batch") || "[]")
+    const apiBaseUrl = getApiBaseUrl()
+
+    browserLog("classify", "Sınıflandırma ekranı açıldı", {
+      apiBaseUrl,
+      playlistUrl,
+      emotions,
+      storedTotal,
+      exampleBatchSize: exampleBatch.length,
+      userAgent: navigator.userAgent,
+    })
 
     if (!isSpotifySessionValid()) {
+      browserLog("classify", "Spotify oturumu geçersiz, login ekranına dönülüyor")
       clearSpotifySession()
       router.push("/login")
       return
     }
 
     if (!playlistUrl || emotions.length === 0) {
+      browserLog("classify", "playlist_url veya emotions eksik, emotions ekranına dönülüyor")
       router.push("/emotions")
       return
     }
@@ -97,6 +135,12 @@ export default function ClassifyPage() {
         if (suggestedStep !== stepIndex) {
           stepIndex = suggestedStep
           setCurrentStep(steps[stepIndex])
+          browserLog("classify", "UI adımı değişti", { step: stepIndex + 1, label: steps[stepIndex], progress: next })
+        }
+
+        if (next === 90 && prev < 90) {
+          setCurrentStep("AI batch sonuçları bekleniyor...")
+          browserLog("classify", "İlerleme %90: backend batch sonuçları bekleniyor")
         }
 
         return next
@@ -106,25 +150,53 @@ export default function ClassifyPage() {
     let songIndex = 0
     const songInterval = setInterval(() => {
       if (exampleBatch.length > 0) {
-        setCurrentSong(exampleBatch[songIndex % exampleBatch.length])
+        const song = exampleBatch[songIndex % exampleBatch.length]
+        setCurrentSong(song)
+        browserLog("classify", "Örnek şarkı gösteriliyor", { song, index: songIndex })
         songIndex += 1
       }
     }, 1800)
 
     const runClassification = async () => {
+      const startedAt = performance.now()
+
       try {
-        const response = await fetch(`${API_BASE_URL}/classify`, {
+        browserLog("classify", "classify isteği gönderiliyor", {
+          endpoint: `${apiBaseUrl}/classify`,
+          playlist_url: playlistUrl,
+          emotions,
+        })
+
+        const response = await fetch(`${apiBaseUrl}/classify`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ playlist_url: playlistUrl, emotions }),
         })
 
         const result: ClassificationResult = await response.json()
+        browserLog("classify", "classify cevabı alındı", {
+          status: response.status,
+          ok: response.ok,
+          elapsedMs: Math.round(performance.now() - startedAt),
+        })
+
         if (!response.ok) {
           throw new Error((result as unknown as { detail?: string }).detail || "Sınıflandırma başarısız")
         }
 
         if (cancelled) return
+
+        if (Array.isArray(result.client_events)) {
+          result.client_events.forEach((event) => {
+            browserLog("classify:backend", event.message || event.event, event)
+          })
+        }
+
+        if (Array.isArray(result.batch_logs)) {
+          result.batch_logs.forEach((batchLog) => {
+            browserLog("classify:batch", `Batch ${batchLog.batch}/${batchLog.total_batches} ${batchLog.status}`, batchLog)
+          })
+        }
 
         localStorage.setItem("classification_results", JSON.stringify(result))
         setEmotionStats(statsToArray(result.emotion_stats || {}))
@@ -136,13 +208,21 @@ export default function ClassifyPage() {
         setCurrentStep("Tamamlandı!")
         setIsComplete(true)
 
+        browserLog("classify", "Sınıflandırma tamamlandı, save ekranına yönlendiriliyor", {
+          totalSongs: result.total_songs,
+          totalBatches: result.total_batches,
+          failedBatches: (result.failed_batches || []).length,
+        })
+
         setTimeout(() => {
           router.push("/save")
         }, 1500)
       } catch (err) {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : "Bir hata oluştu")
+        const message = err instanceof Error ? err.message : "Bir hata oluştu"
+        setError(message)
         setCurrentStep("Bir hata oluştu")
+        browserError("classify", "Sınıflandırma hatası", { message, error: err })
       } finally {
         clearInterval(progressInterval)
       }
@@ -152,6 +232,7 @@ export default function ClassifyPage() {
 
     return () => {
       cancelled = true
+      browserLog("classify", "Sınıflandırma ekranı temizleniyor (unmount)")
       clearInterval(progressInterval)
       clearInterval(songInterval)
     }

@@ -483,11 +483,39 @@ def process_playlist(
     merged: list[dict] = []
     failed_batches: list[dict] = []
     batch_logs: list[dict] = []
+    batch_summaries: list[dict] = []
     ai_raw_logs: list[dict] = []
+    client_events: list[dict] = []
+
+    def _push_client_event(event: str, message: str, **kwargs) -> None:
+        client_events.append(
+            {
+                "ts": datetime.now().isoformat(timespec="seconds"),
+                "event": event,
+                "message": message,
+                **kwargs,
+            }
+        )
+
+    _push_client_event(
+        "classification_started",
+        "Sınıflandırma başlatıldı",
+        playlist_id=playlist_id,
+        total_songs=len(songs),
+        total_batches=total_batches,
+        emotions=normalized_emotions,
+    )
 
     for i, batch in enumerate(batches):
         batch_no = i + 1
         _log(f"Batch {batch_no}/{total_batches} hazırlanıyor... song_count={len(batch)}")
+        _push_client_event(
+            "batch_started",
+            f"Batch {batch_no}/{total_batches} başladı",
+            batch=batch_no,
+            total_batches=total_batches,
+            song_count=len(batch),
+        )
 
         if progress_callback:
             try:
@@ -533,6 +561,30 @@ def process_playlist(
                 }
             )
 
+            batch_summaries.append(
+                {
+                    "batch": batch_no,
+                    "total_batches": total_batches,
+                    "status": "ok",
+                    "duration_sec": elapsed,
+                    "song_count": len(batch),
+                    "provider": used_provider,
+                    "mode": used_mode,
+                    "attempt": used_attempt,
+                    "unique_labels": unique_labels,
+                }
+            )
+            _push_client_event(
+                "batch_done",
+                f"Batch {batch_no}/{total_batches} tamamlandı",
+                batch=batch_no,
+                total_batches=total_batches,
+                status="ok",
+                duration_sec=elapsed,
+                song_count=len(batch),
+                unique_labels=unique_labels,
+            )
+
             ai_raw_logs.append(
                 {
                     "batch": batch_no,
@@ -567,6 +619,31 @@ def process_playlist(
                 }
             )
 
+            batch_summaries.append(
+                {
+                    "batch": batch_no,
+                    "total_batches": total_batches,
+                    "status": "fallback",
+                    "duration_sec": elapsed,
+                    "song_count": len(batch),
+                    "provider": "openrouter",
+                    "mode": "fallback",
+                    "attempt": 0,
+                    "unique_labels": sorted(set(labels)),
+                    "reason": reason,
+                }
+            )
+            _push_client_event(
+                "batch_done",
+                f"Batch {batch_no}/{total_batches} fallback ile tamamlandı",
+                batch=batch_no,
+                total_batches=total_batches,
+                status="fallback",
+                duration_sec=elapsed,
+                song_count=len(batch),
+                reason=reason,
+            )
+
             ai_raw_logs.append(
                 {
                     "batch": batch_no,
@@ -599,6 +676,13 @@ def process_playlist(
             )
 
         _log(f"Batch {batch_no}/{total_batches} işlendi. merged_count={len(merged)}")
+        _push_client_event(
+            "batch_merged",
+            f"Batch {batch_no}/{total_batches} etiketleri birleştirildi",
+            batch=batch_no,
+            total_batches=total_batches,
+            merged_count=len(merged),
+        )
 
         if CLASSIFY_DELAY_MS > 0 and i < total_batches - 1:
             time.sleep(CLASSIFY_DELAY_MS / 1000)
@@ -648,6 +732,14 @@ def process_playlist(
         f"Sınıflandırma tamamlandı. playlist_id={playlist_id}, total_songs={len(songs)}, failed_batches={len(failed_batches)}"
     )
     _log("AI ham cevapları kaydedildi: datas/ai_raw_responses.json")
+    _push_client_event(
+        "classification_completed",
+        "Sınıflandırma tamamlandı",
+        playlist_id=playlist_id,
+        total_songs=len(songs),
+        total_batches=total_batches,
+        failed_batches=len(failed_batches),
+    )
 
     return {
         "playlist_id": playlist_id,
@@ -656,6 +748,8 @@ def process_playlist(
         "emotion_stats": emotion_stats,
         "grouped_tracks": grouped_tracks,
         "failed_batches": failed_batches,
+        "batch_logs": batch_summaries,
+        "client_events": client_events,
     }
 
 

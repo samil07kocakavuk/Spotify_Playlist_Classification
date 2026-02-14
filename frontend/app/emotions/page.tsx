@@ -10,8 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { X, Plus, Heart, Smile, Frown, Zap, Moon, Sun, Sparkles } from "lucide-react"
 import { clearSpotifySession, isSpotifySessionValid } from "@/lib/auth"
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
+import { browserError, browserLog, getApiBaseUrl } from "@/lib/runtime-config"
 
 const suggestedEmotions = [
   { name: "mutlu", icon: Smile, color: "from-yellow-400 to-orange-500", description: "Neşeli ve pozitif şarkılar" },
@@ -64,8 +63,16 @@ export default function EmotionsPage() {
 
     localStorage.setItem("emotions", JSON.stringify(normalizedEmotions))
 
+    const apiBaseUrl = getApiBaseUrl()
+
     try {
-      const response = await fetch(`${API_BASE_URL}/playlist_info`, {
+      browserLog("emotions", "playlist_info isteği başlatılıyor", {
+        apiBaseUrl,
+        playlistUrl,
+        emotions: normalizedEmotions,
+      })
+
+      const response = await fetch(`${apiBaseUrl}/playlist_info`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -78,6 +85,8 @@ export default function EmotionsPage() {
       }
 
       const result = await response.json()
+      browserLog("emotions", "playlist_info cevabı alındı", result)
+
       localStorage.setItem("total_songs", String(result.total_songs || 0))
 
       const songNames = (result.example_batch || []).map(
@@ -85,9 +94,14 @@ export default function EmotionsPage() {
       )
       localStorage.setItem("example_batch", JSON.stringify(songNames))
 
+      browserLog("emotions", "Örnek batch localStorage'a yazıldı", {
+        totalSongs: result.total_songs || 0,
+        exampleBatchSize: songNames.length,
+      })
+
       router.push("/classify")
     } catch (error) {
-      console.error("❌ Backend'e istek gönderilemedi:", error)
+      browserError("emotions", "Backend'e istek gönderilemedi", error)
     }
   }
 

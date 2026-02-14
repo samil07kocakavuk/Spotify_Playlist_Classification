@@ -6,15 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Music, Shield, Zap, Users, Star, Lock } from "lucide-react"
 import { isSpotifySessionValid } from "@/lib/auth"
+import { browserLog, getSpotifyRedirectUri } from "@/lib/runtime-config"
 
 const SPOTIFY_CLIENT_ID = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID || ""
-const SPOTIFY_REDIRECT_URI = process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI || "http://127.0.0.1:3000/callback"
 
 const SCOPES = ["playlist-read-private", "playlist-modify-private", "playlist-modify-public"]
-
-const loginUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(
-  SPOTIFY_REDIRECT_URI,
-)}&scope=${encodeURIComponent(SCOPES.join(" "))}`
 
 export default function LoginPage() {
   const router = useRouter()
@@ -31,7 +27,16 @@ export default function LoginPage() {
       return
     }
 
-    // Gerçek Spotify OAuth girişi
+    const redirectUri = getSpotifyRedirectUri()
+    const loginUrl = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(
+      redirectUri,
+    )}&scope=${encodeURIComponent(SCOPES.join(" "))}`
+
+    browserLog("login", "Spotify OAuth başlatılıyor", {
+      redirectUri,
+      scopes: SCOPES,
+    })
+
     window.location.href = loginUrl
   }
 
