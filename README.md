@@ -1,53 +1,111 @@
-# Spotify Playlist Classifier (Tek Proje)
+# 🎧 Spotify Playlist Classification
 
-Yapı:
-- `main.py` + `spotify.py` => FastAPI backend
-- `frontend/` => Next.js frontend
+Full-stack application for analyzing and classifying Spotify playlists
+by emotion or theme using AI.
 
-## Backend
+------------------------------------------------------------------------
 
-```bash
-cd Sonuc
-pip install -r requirements.txt
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+## 🚀 Overview
 
-Backend `.env` dosyasını otomatik okur. Gerekli alanlar:
-- `SPOTIFY_CLIENT_ID`
-- `SPOTIFY_CLIENT_SECRET`
-- `SPOTIFY_REDIRECT_URI`
-- `OPENROUTER_API_KEY`
-- `OPENROUTER_MODEL` (free model önerilir)
+-   **Backend:** FastAPI + Spotify Web API integration\
+-   **Frontend:** Next.js (App Router) + TypeScript + TailwindCSS\
+-   **AI:** Provider-agnostic (OpenAI, OpenRouter, Gemini, etc.)\
+-   **Docker-ready** deployment support
 
-## Frontend
+------------------------------------------------------------------------
 
-```bash
-cd Sonuc/frontend
-npm install
-npm run dev
-```
+## 📁 Project Structure
 
-Frontend `frontend/.env.local` dosyasını kullanır. Gerekli alanlar:
-- `NEXT_PUBLIC_API_BASE_URL`
-- `NEXT_PUBLIC_SPOTIFY_CLIENT_ID`
-- `NEXT_PUBLIC_SPOTIFY_REDIRECT_URI`
+    Spotify_Playlist_Classification/
+    │
+    ├── frontend/
+    │   ├── app/
+    │   │   ├── login/
+    │   │   ├── callback/
+    │   │   ├── classify/
+    │   │   ├── emotions/
+    │   │   ├── save/
+    │   │   ├── success/
+    │   │   ├── health/
+    │   │   ├── layout.tsx
+    │   │   └── page.tsx
+    │   ├── components/
+    │   ├── hooks/
+    │   └── lib/
+    │
+    ├── main.py
+    ├── spotify.py
+    ├── requirements.txt
+    ├── Dockerfile
+    └── run_dev.bat
 
-## Akış
+------------------------------------------------------------------------
 
-1. Spotify login
-2. Playlist URL girme
-3. Duygu seçimi
-4. `/classify` -> şarkılar batch batch OpenRouter'a gider
-5. Sonuçlar:
-   - `datas/merged.json`
-   - `datas/batch_logs.json`
-   - `datas/ai_raw_responses.json` (AI ham cevabı)
-6. `/save_playlists` ile Spotify'a yeni listeler oluşturulur
+## 🧠 How It Works
 
-## API
+1.  User authenticates via Spotify OAuth.
+2.  Playlist tracks are fetched using Spotify Web API.
+3.  Tracks are processed in batches.
+4.  AI model classifies songs (emotion/mood).
+5.  Results are displayed and can optionally be saved as new playlists.
 
-- `GET /health`
-- `POST /spotify/token`
-- `POST /playlist_info`
-- `POST /classify`
-- `POST /save_playlists`
+------------------------------------------------------------------------
+
+## 🛠 Tech Stack
+
+**Backend** - Python - FastAPI - Spotify Web API
+
+**Frontend** - Next.js - TypeScript - TailwindCSS
+
+**Dev / Deploy** - Docker - Node.js
+
+------------------------------------------------------------------------
+
+## ⚙️ Local Setup
+
+### Clone
+
+    git clone https://github.com/samil07kocakavuk/Spotify_Playlist_Classification.git
+    cd Spotify_Playlist_Classification
+
+### Backend
+
+    pip install -r requirements.txt
+    uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+API: http://localhost:8000
+
+### Frontend
+
+    cd frontend
+    npm install
+    npm run dev
+
+App: http://localhost:3000
+
+------------------------------------------------------------------------
+
+## 🔐 Environment Variables
+
+Create a `.env` file in the project root:
+
+    SPOTIFY_CLIENT_ID=your_spotify_client_id
+    SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+    SPOTIFY_REDIRECT_URI=http://localhost:3000/callback
+
+    CORS_ORIGINS=http://localhost:3000
+
+    AI_API_BASE=https://api.your-provider.com/v1
+    AI_API_KEY=your_ai_api_key
+    AI_MODEL=your_model_name
+    AI_MAX_RETRIES=5
+
+    CLASSIFY_BATCH_SIZE=10
+    CLASSIFY_DELAY_MS=1000
+    CLASSIFY_FAIL_ON_BATCH_ERROR=1
+
+------------------------------------------------------------------------
+
+## ⭐ Support
+
+If you find this project useful, consider giving it a star.
